@@ -36,6 +36,11 @@ function personPortrait(opts) {
   if (mood === 'happy') mouth = '<rect x="24" y="33" width="4" height="2" fill="#5a3a2a"/><rect x="28" y="35" width="8" height="2" fill="#5a3a2a"/><rect x="36" y="33" width="4" height="2" fill="#5a3a2a"/>';
   if (mood === 'stern') mouth = '<rect x="25" y="35" width="14" height="2" fill="#5a3a2a"/>';
   if (mood === 'worried') mouth = '<rect x="26" y="36" width="12" height="2" fill="#5a3a2a"/><rect x="24" y="34" width="4" height="2" fill="#5a3a2a"/><rect x="36" y="34" width="4" height="2" fill="#5a3a2a"/>';
+  if (mood === 'sad') mouth = '<rect x="24" y="37" width="4" height="2" fill="#5a3a2a"/><rect x="28" y="35" width="8" height="2" fill="#5a3a2a"/><rect x="36" y="37" width="4" height="2" fill="#5a3a2a"/>';
+
+  let brows = '';
+  if (mood === 'sad') brows = '<rect x="20" y="24" width="6" height="2" fill="#3a2418" transform="rotate(12 23 25)"/><rect x="38" y="24" width="6" height="2" fill="#3a2418" transform="rotate(-12 41 25)"/>';
+  if (mood === 'happy') brows = '<rect x="20" y="24" width="6" height="2" fill="#3a2418"/><rect x="38" y="24" width="6" height="2" fill="#3a2418"/>';
 
   return svgWrap(`
     <rect width="64" height="64" fill="${bgColor}"/>
@@ -48,15 +53,32 @@ function personPortrait(opts) {
     ${glasses ? `<rect x="18" y="25" width="12" height="9" fill="none" stroke="#201a10" stroke-width="1.5"/><rect x="34" y="25" width="12" height="9" fill="none" stroke="#201a10" stroke-width="1.5"/><rect x="30" y="28" width="4" height="1.5" fill="#201a10"/>` : ''}
     <rect x="29" y="30" width="6" height="4" fill="${skin}" stroke="#c9906a" stroke-width="0.5"/>
     ${mouth}
+    ${brows}
     ${accessory || ''}
   `);
 }
 
 // ---- Playable Characters ----
+// Base look for each playable character, reused so mood-specific variants
+// (for reaction feedback) always match their default portrait exactly.
+const CHARACTER_LOOKS = {
+  alex: { skin: '#e0a878', hair: '#2a1a10', shirt: '#c9414a', hairStyle: 'short', bgColor: '#1c2d52' },
+  sam: { skin: '#f0c8a0', hair: '#1a1a1a', shirt: '#2f5d8a', hairStyle: 'part', glasses: true, bgColor: '#1c2d52' },
+  jordan: { skin: '#c98a5e', hair: '#4a2e18', shirt: '#3a8a5c', hairStyle: 'curly', bgColor: '#1c2d52' },
+};
+
+// Render a playable character's portrait in a specific mood (used for the
+// brief happy/sad expression swap when something good or bad happens).
+function getCharacterPortraitSVG(characterId, mood) {
+  const look = CHARACTER_LOOKS[characterId];
+  if (!look) return getPortraitSVG(characterId);
+  return personPortrait({ ...look, mood: mood || 'happy' });
+}
+
 const PORTRAITS = {
-  alex: () => personPortrait({ skin: '#e0a878', hair: '#2a1a10', shirt: '#c9414a', hairStyle: 'short', mood: 'happy', bgColor: '#1c2d52' }),
-  sam: () => personPortrait({ skin: '#f0c8a0', hair: '#1a1a1a', shirt: '#2f5d8a', hairStyle: 'part', glasses: true, mood: 'neutral', bgColor: '#1c2d52' }),
-  jordan: () => personPortrait({ skin: '#c98a5e', hair: '#4a2e18', shirt: '#3a8a5c', hairStyle: 'curly', mood: 'happy', bgColor: '#1c2d52' }),
+  alex: () => personPortrait({ ...CHARACTER_LOOKS.alex, mood: 'happy' }),
+  sam: () => personPortrait({ ...CHARACTER_LOOKS.sam, mood: 'neutral' }),
+  jordan: () => personPortrait({ ...CHARACTER_LOOKS.jordan, mood: 'happy' }),
 
   // Underwriters
   uw_marge: () => personPortrait({ skin: '#f0d0a8', hair: '#8a8a8a', shirt: '#3a3a5a', hairStyle: 'bun', glasses: true, mood: 'stern', bgColor: '#2f5d8a' }),

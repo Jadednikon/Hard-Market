@@ -1,10 +1,13 @@
 // ============================================================
-// HARD MARKET — UI / MAIN CONTROLLER
+// HARD MARKET — UI / MAIN CONTROLLER (GBA dialogue-box edition)
+// All in-game interaction routes through the docked dialogue box.
+// A simple navigation stack gives us Pokemon-style BACK behavior.
 // ============================================================
 
 let GAME = null;
 let SELECTED_CHARACTER = null;
 let SELECTED_CAREER = null;
+let NAV_STACK = []; // stack of render functions (no-arg closures) for BACK navigation
 
 // ---------------- BOOT ----------------
 window.addEventListener('DOMContentLoaded', () => {
@@ -99,12 +102,12 @@ function continueGame() {
 }
 
 function confirmReset() {
-  showConfirm('Reset save?', 'This will permanently delete your current agency. This cannot be undone.', () => {
+  if (window.confirm('Reset save?\n\nThis will permanently delete your current agency. This cannot be undone.')) {
     deleteSave();
     document.getElementById('btn-continue').style.display = 'none';
     document.getElementById('btn-reset').style.display = 'none';
     toast('Save deleted.');
-  });
+  }
 }
 
 // ---------------- OFFICE SCREEN ----------------
@@ -113,52 +116,57 @@ function enterOffice() {
   buildOfficeScene();
   refreshTopbar();
   refreshStatStrip();
+  NAV_STACK = [];
   if (GAME.flags.justLeveledUp) {
     GAME.flags.justLeveledUp = false;
-    showLevelUpModal();
+    pushDialogue(renderLevelUp);
   } else {
-    maybeTriggerDailyEvent();
+    const eventRoll = maybeGetDailyEvent();
+    if (eventRoll) {
+      pushDialogue(() => renderEvent(eventRoll));
+    } else {
+      renderMainMenu();
+    }
   }
 }
 
 function buildOfficeScene() {
   const scene = document.getElementById('office-scene');
-  const character = CHARACTERS.find(c => c.id === GAME.meta.characterId);
-  scene.innerHTML = `
-    <div class="office-bg">${officeBackgroundLevel1()}</div>
-    <div id="player-sprite" style="left:50%;top:78%;">${playerSpriteSVG(character)}</div>
-  `;
+  // Static scene art. Drop a real illustrated PNG in assets/ and point SCENE_ART_URL
+  // at it (see js/art/office.js) to replace this placeholder SVG with zero other changes.
+  const artHtml = (typeof SCENE_ART_URL !== 'undefined' && SCENE_ART_URL)
+    ? `<img class="scene-art" src="${SCENE_ART_URL}" alt="Office scene">`
+    : `<div class="office-bg">${officeBackgroundLevel1()}</div>`;
+  scene.innerHTML = artHtml + `<div class="npc-portrait-inset" id="npc-portrait-inset"></div>`;
+
   OFFICE_HOTSPOTS_L1.forEach(h => {
     const el = document.createElement('div');
-    el.className = 'hotspot pulse';
+    el.className = 'scene-marker';
     el.style.left = h.left; el.style.top = h.top;
     el.style.width = h.width; el.style.height = h.height;
-    el.innerHTML = `${hotspotIconSVG(h.id)}<span class="hotspot-label">${h.label}</span>`;
-    el.onclick = () => walkToAndOpen(h);
+    el.innerHTML = `${hotspotIconSVG(h.id)}<span class="scene-marker-label">${h.label}</span>`;
+    el.onclick = () => onSceneMarkerTap(h.id);
     scene.appendChild(el);
   });
 }
 
-function walkToAndOpen(hotspot) {
-  const sprite = document.getElementById('player-sprite');
-  sprite.style.left = hotspot.standLeft;
-  sprite.style.top = hotspot.standTop;
-  setTimeout(() => {
-    if (hotspot.id === 'phone') openProspects();
-    else if (hotspot.id === 'computer') openMarket();
-    else if (hotspot.id === 'files') openClients();
-    else if (hotspot.id === 'desk') openNetworking();
-  }, 380);
+function onSceneMarkerTap(id) {
+  if (id === 'phone') openProspects();
+  else if (id === 'computer') openMarket();
+  else if (id === 'files') openClients();
+  else if (id === 'desk') openNetworking();
 }
 
-function showOfficeHome() {
-  setActiveNav('office');
-}
-
-function setActiveNav(id) {
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.querySelector(`.nav-btn[data-nav="${id}"]`);
-  if (btn) btn.classList.add('active');
+function setNpcPortrait(portraitId) {
+  const el = document.getElementById('npc-portrait-inset');
+  if (!el) return;
+  if (portraitId) {
+    el.innerHTML = getPortraitSVG(portraitId);
+    el.classList.add('show');
+  } else {
+    el.innerHTML = '';
+    el.classList.remove('show');
+  }
 }
 
 function refreshTopbar() {
@@ -200,61 +208,114 @@ function refreshAll() {
   saveGame(GAME);
 }
 
-// ---------------- MODAL SYSTEM ----------------
-function openModal(title, bodyHtml, footerHtml = '') {
-  document.getElementById('modal-title').textContent = title;
-  document.getElementById('modal-body').innerHTML = bodyHtml;
-  document.getElementById('modal-footer').innerHTML = footerHtml;
-  document.getElementById('modal-overlay').classList.add('active');
+// ================================================================
+// DIALOGUE BOX ENGINE
+// Every screen is a "render function" with no args that repaints
+// dlg-title / dlg-body / dlg-menu. pushDialogue() adds it to a back
+// stack; dlgBack() pops and re-renders the previous one (or the main
+// menu if the stack is empty).
+// ================================================================
+
+function setDialogue(title, bodyHtml, menuHtml, opts = {}) {
+  document.getElementById('dlg-title').textContent = title;
+  document.getElementById('dlg-body').innerHTML = bodyHtml;
+  document.getElementById('dlg-menu').innerHTML = menuHtml;
+  document.getElementById('dlg-back-btn').style.display = NAV_STACK.length > 0 ? '' : 'none';
+  if (opts.npcPortrait !== undefined) setNpcPortrait(opts.npcPortrait);
 }
+
+// Push current-and-new: call with the render fn for the screen you're navigating TO.
+function pushDialogue(renderFn) {
+  NAV_STACK.push(renderFn);
+  renderFn();
+}
+
+// Replace the top of the stack without growing it (for refreshing the same screen in place)
+function repaintTop(renderFn) {
+  if (NAV_STACK.length === 0) { pushDialogue(renderFn); return; }
+  NAV_STACK[NAV_STACK.length - 1] = renderFn;
+  renderFn();
+}
+
+function dlgBack() {
+  NAV_STACK.pop();
+  if (NAV_STACK.length === 0) {
+    renderMainMenu();
+  } else {
+    NAV_STACK[NAV_STACK.length - 1]();
+    document.getElementById('dlg-back-btn').style.display = NAV_STACK.length > 0 ? '' : 'none';
+  }
+}
+
+// closeModal() is kept as an alias so any legacy call sites behave sensibly:
+// it returns all the way to the main menu, like pressing B repeatedly.
 function closeModal() {
-  document.getElementById('modal-overlay').classList.remove('active');
+  NAV_STACK = [];
+  renderMainMenu();
   refreshAll();
 }
-function showConfirm(title, msg, onConfirm) {
-  openModal(title, `<p>${msg}</p>`, `
-    <button class="btn btn-small" onclick="closeModal()">CANCEL</button>
-    <button class="btn btn-small btn-danger" id="confirm-yes-btn">YES</button>
-  `);
-  document.getElementById('confirm-yes-btn').onclick = () => { closeModal(); onConfirm(); };
+
+function menuRow(label, onclickAttr, opts = {}) {
+  const subHtml = opts.sub ? `<div class="menu-row-sub">${opts.sub}</div>` : '';
+  const rightHtml = opts.tag ? `<span class="row-tag ${opts.tagClass || ''}">${opts.tag}</span>`
+    : opts.cost ? `<span class="row-cost">${opts.cost}</span>` : '';
+  const mod = opts.mod ? ` mr-${opts.mod}` : '';
+  return `<button class="menu-row${mod}" onclick="${onclickAttr}">
+    <div class="menu-row-body"><div class="menu-row-title">${label}</div>${subHtml}</div>
+    ${rightHtml}
+  </button>`;
+}
+
+// ---------------- MAIN MENU (idle / default state) ----------------
+function renderMainMenu() {
+  NAV_STACK = [];
+  const flavor = pick([
+    'The phone could ring any minute.',
+    'Another day at the borrowed desk.',
+    "Coffee's cold. Book's not gonna build itself.",
+    'The market never sleeps. Neither do you, apparently.',
+  ]);
+  const body = `<div class="dialogue-text">${flavor}</div>`;
+  const menu =
+    menuRow('Work the Phones', 'openProspects()', { sub: `${GAME.prospects.length} lead${GAME.prospects.length === 1 ? '' : 's'} waiting` }) +
+    menuRow('Review Your Book', 'openClients()', { sub: `${GAME.clients.length} client${GAME.clients.length === 1 ? '' : 's'}` }) +
+    menuRow('Check the Market', 'openMarket()') +
+    menuRow('Staff', 'openStaff()') +
+    menuRow('Network at the Desk', 'openNetworking()') +
+    menuRow('End the Day', 'confirmEndDay()', { mod: 'gold' });
+  setDialogue('OFFICE', body, menu, { npcPortrait: null });
 }
 
 // ---------------- PROSPECTS / LEADS ----------------
 function openProspects() {
-  setActiveNav('prospects');
-  renderProspectsList();
+  pushDialogue(renderProspectsList);
 }
 function renderProspectsList() {
-  const list = GAME.prospects.map(p => {
+  const body = `<div class="dialogue-text">Time left today: <b>${GAME.resources.time} / ${GAME.resources.timeMax}</b></div>` +
+    (GAME.prospects.length ? '' : '<div class="empty-state">No leads right now. Try networking at the desk, or end the day for fresh ones.</div>');
+  const menu = GAME.prospects.map(p => {
     const line = LINES[p.lineId];
-    return `<div class="list-item" onclick="openProspectDetail('${p.id}')">
-      <div class="li-body">
-        <div class="li-title">${p.name}</div>
-        <div class="li-sub">${line.name} · Est. $${p.estPremium.toLocaleString()} premium · ${p.urgency} urgency</div>
-      </div>
-      <span class="li-tag ${line.difficulty.toLowerCase()}">${line.difficulty}</span>
-    </div>`;
+    return menuRow(p.name, `openProspectDetail('${p.id}')`, {
+      sub: `${line.name} · Est. $${p.estPremium.toLocaleString()}`,
+      tag: line.difficulty, tagClass: line.difficulty.toLowerCase(),
+    });
   }).join('');
-  openModal('LEADS', `
-    <div class="progress-header"><span>Time left today</span><span>${GAME.resources.time} / ${GAME.resources.timeMax}</span></div>
-    ${GAME.prospects.length ? list : '<div class="empty-state">No leads right now. Try Networking at the desk, or end the day for fresh leads.</div>'}
-  `, `<button class="btn btn-small" onclick="closeModal()">CLOSE</button>`);
+  setDialogue('LEADS', body, menu, { npcPortrait: null });
 }
 
 function openProspectDetail(id) {
+  pushDialogue(() => renderProspectDetail(id));
+}
+function renderProspectDetail(id) {
   const p = GAME.prospects.find(x => x.id === id);
-  if (!p) return;
+  if (!p) { dlgBack(); return; }
   const line = LINES[p.lineId];
   const submitted = !!p.submittedTo;
+  const portraitId = getClientPortraitId(p.id);
+
   let body = `
-    <div class="event-header">
-      <div class="portrait-frame small">${getPortraitSVG(getClientPortraitId(p.id))}</div>
-      <div>
-        <div style="font-weight:bold;">${p.name}</div>
-        <div class="event-cat">${line.name}</div>
-      </div>
-    </div>
-    <p style="font-style:italic;color:var(--wood);">"${p.quirk}"</p>
+    <div class="dialogue-text" style="font-style:italic;color:var(--wood);">"${p.quirk}"</div>
+    <div class="detail-row"><span class="k">Line</span><span class="v">${line.name}</span></div>
     <div class="detail-row"><span class="k">Est. Premium</span><span class="v">$${p.estPremium.toLocaleString()}</span></div>
     <div class="detail-row"><span class="k">Est. Commission</span><span class="v good">$${p.estCommission.toLocaleString()}</span></div>
     <div class="detail-row"><span class="k">Difficulty</span><span class="v">${line.difficulty}</span></div>
@@ -269,16 +330,14 @@ function openProspectDetail(id) {
     `;
   }
 
-  let footer = '';
+  let menu = '';
   if (!submitted) {
-    footer = `
-      ${!p.infoGathered ? `<button class="btn btn-small" onclick="doGatherInfo('${p.id}')">GATHER INFO (−1 Time)</button>` : ''}
-      <button class="btn btn-small btn-gold" onclick="openCarrierSelect('${p.id}')">SUBMIT TO CARRIER</button>
-      <button class="btn btn-small btn-danger" onclick="doWalkAway('${p.id}')">WALK AWAY</button>
-    `;
+    if (!p.infoGathered) menu += menuRow('Gather Info', `doGatherInfo('${p.id}')`, { cost: '−1 Time' });
+    menu += menuRow('Submit to Carrier', `openCarrierSelect('${p.id}')`, { mod: 'gold' });
+    menu += menuRow('Walk Away', `doWalkAway('${p.id}')`, { mod: 'danger' });
   } else if (!p.uwOutcome) {
-    footer = `<button class="btn btn-small btn-gold" onclick="doResolveUW('${p.id}')">CHECK UNDERWRITING</button>`;
-    body += `<div class="section-label">Status</div><p>Submitted to ${CARRIERS[p.submittedTo].name} (${p.submissionMode === 'complete' ? 'Complete' : 'Quick'}). Awaiting response.</p>`;
+    body += `<div class="section-label">Status</div><div class="dialogue-text">Submitted to ${CARRIERS[p.submittedTo].name} (${p.submissionMode === 'complete' ? 'Complete' : 'Quick'}). Awaiting response.</div>`;
+    menu += menuRow('Check Underwriting', `doResolveUW('${p.id}')`, { mod: 'gold' });
   } else if (p.uwOutcome === 'quote') {
     body += `
       <div class="section-label">Quote Received</div>
@@ -286,68 +345,69 @@ function openProspectDetail(id) {
       <div class="detail-row"><span class="k">Final Premium</span><span class="v good">$${p.finalPremium.toLocaleString()}</span></div>
       <div class="detail-row"><span class="k">Your Commission</span><span class="v good">$${Math.round(p.finalPremium * line.commissionRate).toLocaleString()}</span></div>
     `;
-    footer = `<button class="btn btn-small btn-primary" onclick="doBind('${p.id}')">PRESENT &amp; BIND</button>`;
+    menu += menuRow('Present & Bind', `doBind('${p.id}')`, { mod: 'primary' });
   } else if (p.uwOutcome === 'moreinfo') {
-    body += `<div class="section-label">Status</div><p>${CARRIERS[p.submittedTo].name} wants more info before quoting.</p>`;
-    footer = `
-      <button class="btn btn-small btn-gold" onclick="doResubmit('${p.id}', 'complete')">SEND FULL PACKAGE (−3 Time)</button>
-      <button class="btn btn-small" onclick="doResubmit('${p.id}', 'quick')">SEND QUICK REPLY (−1 Time)</button>
-    `;
+    body += `<div class="section-label">Status</div><div class="dialogue-text">${CARRIERS[p.submittedTo].name} wants more info before quoting.</div>`;
+    menu += menuRow('Send Full Package', `doResubmit('${p.id}','complete')`, { cost: '−3 Time', mod: 'gold' });
+    menu += menuRow('Send Quick Reply', `doResubmit('${p.id}','quick')`, { cost: '−1 Time' });
   } else if (p.uwOutcome === 'decline') {
-    body += `<div class="section-label">Status</div><p>${CARRIERS[p.submittedTo].name} declined this one.</p>`;
-    footer = `
-      <button class="btn btn-small btn-gold" onclick="doRemarket('${p.id}')">REMARKET TO ANOTHER CARRIER</button>
-      <button class="btn btn-small btn-danger" onclick="doWalkAway('${p.id}')">WALK AWAY</button>
-    `;
+    body += `<div class="section-label">Status</div><div class="dialogue-text">${CARRIERS[p.submittedTo].name} declined this one.</div>`;
+    menu += menuRow('Remarket to Another Carrier', `doRemarket('${p.id}')`, { mod: 'gold' });
+    menu += menuRow('Walk Away', `doWalkAway('${p.id}')`, { mod: 'danger' });
   }
-  footer += `<button class="btn btn-small" onclick="openProspects()">BACK</button>`;
 
-  openModal(p.name, body, footer);
+  setDialogue(p.name, body, menu, { npcPortrait: portraitId });
 }
 
 function doGatherInfo(id) {
   const r = gatherInfo(GAME, id);
   toast(r.msg);
-  openProspectDetail(id);
+  repaintTop(() => renderProspectDetail(id));
 }
 
 function doWalkAway(id) {
   walkAwayFromProspect(GAME, id);
   toast('Passed on this one.');
-  openProspects();
+  dlgBack();
 }
 
 function openCarrierSelect(id) {
+  pushDialogue(() => renderCarrierSelect(id));
+}
+function renderCarrierSelect(id) {
   const p = GAME.prospects.find(x => x.id === id);
+  if (!p) { dlgBack(); return; }
   const suggested = bestCarrierFor(p.lineId);
-  const body = Object.values(CARRIERS).map(c => `
-    <div class="list-item" onclick="chooseCarrierMode('${id}','${c.id}')">
-      <div class="li-body">
-        <div class="li-title">${c.name} ${c.id === suggested ? '⭐' : ''}</div>
-        <div class="li-sub">${c.tagline}</div>
-      </div>
-      <span class="li-tag ${c.appetiteBias[p.lineId] > 1.05 ? 'easy' : c.appetiteBias[p.lineId] < 0.75 ? 'hard' : 'medium'}">
-        ${c.appetiteBias[p.lineId] > 1.05 ? 'GOOD FIT' : c.appetiteBias[p.lineId] < 0.75 ? 'TOUGH' : 'OK FIT'}
-      </span>
-    </div>
-  `).join('');
-  openModal('Choose Carrier', body, `<button class="btn btn-small" onclick="openProspectDetail('${id}')">BACK</button>`);
+  const body = `<div class="dialogue-text">Which carrier should get this one?</div>`;
+  const menu = Object.values(CARRIERS).map(c => {
+    const fit = c.appetiteBias[p.lineId] > 1.05 ? 'GOOD FIT' : c.appetiteBias[p.lineId] < 0.75 ? 'TOUGH' : 'OK FIT';
+    const fitClass = c.appetiteBias[p.lineId] > 1.05 ? 'easy' : c.appetiteBias[p.lineId] < 0.75 ? 'hard' : 'medium';
+    return menuRow(`${c.name}${c.id === suggested ? ' ⭐' : ''}`, `chooseCarrierMode('${id}','${c.id}')`, {
+      sub: c.tagline, tag: fit, tagClass: fitClass,
+    });
+  }).join('');
+  setDialogue('Choose Carrier', body, menu);
 }
 
 function chooseCarrierMode(prospectId, carrierId) {
-  openModal('Submission Type', `
-    <p><b>Quick Submit</b> — cheap in time, weaker odds, less UW goodwill.</p>
-    <p><b>Complete Submission</b> — costs more time, better odds and pricing, builds carrier relationship.</p>
-  `, `
-    <button class="btn btn-small" onclick="doSubmit('${prospectId}','${carrierId}','quick')">QUICK (−1 Time)</button>
-    <button class="btn btn-small btn-gold" onclick="doSubmit('${prospectId}','${carrierId}','complete')">COMPLETE (−3 Time)</button>
-  `);
+  pushDialogue(() => renderSubmissionMode(prospectId, carrierId));
+}
+function renderSubmissionMode(prospectId, carrierId) {
+  const body = `
+    <div class="dialogue-text"><b>Quick Submit</b> — cheap in time, weaker odds, less UW goodwill.</div>
+    <div class="dialogue-text"><b>Complete Submission</b> — costs more time, better odds and pricing, builds carrier relationship.</div>
+  `;
+  const menu =
+    menuRow('Quick Submit', `doSubmit('${prospectId}','${carrierId}','quick')`, { cost: '−1 Time' }) +
+    menuRow('Complete Submission', `doSubmit('${prospectId}','${carrierId}','complete')`, { cost: '−3 Time', mod: 'gold' });
+  setDialogue('Submission Type', body, menu);
 }
 
 function doSubmit(prospectId, carrierId, mode) {
   const r = submitToCarrier(GAME, prospectId, carrierId, mode);
   toast(r.msg);
-  if (r.ok) openProspectDetail(prospectId); else openProspectDetail(prospectId);
+  NAV_STACK = NAV_STACK.slice(0, -2); // drop carrier-select + mode screens
+  pushDialogue(() => renderProspectDetail(prospectId));
   refreshAll();
 }
 
@@ -367,57 +427,53 @@ function doRemarket(prospectId) {
   const p = GAME.prospects.find(x => x.id === prospectId);
   p.submittedTo = null;
   p.uwOutcome = null;
-  openCarrierSelect(prospectId);
+  pushDialogue(() => renderCarrierSelect(prospectId));
 }
 
 function doResolveUW(prospectId) {
   const r = resolveUnderwriting(GAME, prospectId);
   toast(r.msg);
-  openProspectDetail(prospectId);
+  repaintTop(() => renderProspectDetail(prospectId));
   refreshAll();
 }
 
 function doBind(prospectId) {
   const r = bindPolicy(GAME, prospectId);
   toast(r.msg);
-  closeModal();
+  refreshAll();
   if (GAME.flags.justLeveledUp) {
     GAME.flags.justLeveledUp = false;
-    setTimeout(showLevelUpModal, 400);
+    NAV_STACK = [];
+    setTimeout(() => pushDialogue(renderLevelUp), 300);
+  } else {
+    NAV_STACK = [];
+    renderMainMenu();
   }
-  refreshAll();
 }
 
 // ---------------- CLIENTS / BOOK ----------------
 function openClients() {
-  setActiveNav('clients');
-  renderClientsList();
+  pushDialogue(renderClientsList);
 }
 function renderClientsList() {
-  const list = GAME.clients.map(c => {
+  const body = `<div class="dialogue-text">Total book premium: <b>$${GAME.resources.bookPremium.toLocaleString()}</b></div>` +
+    (GAME.clients.length ? '' : '<div class="empty-state">No clients yet. Work the phones to start prospecting.</div>');
+  const menu = GAME.clients.map(c => {
     const line = LINES[c.lineId];
-    return `<div class="list-item" onclick="openClientDetail('${c.id}')">
-      <div class="portrait-frame small">${getPortraitSVG(c.portraitId)}</div>
-      <div class="li-body">
-        <div class="li-title">${c.name}</div>
-        <div class="li-sub">${line.name} · $${c.premium.toLocaleString()} · ${CARRIERS[c.carrierId].name}</div>
-      </div>
-    </div>`;
+    return menuRow(c.name, `openClientDetail('${c.id}')`, { sub: `${line.name} · $${c.premium.toLocaleString()} · ${CARRIERS[c.carrierId].name}` });
   }).join('');
-  openModal('YOUR BOOK', `
-    <div class="progress-header"><span>Total book premium</span><span>$${GAME.resources.bookPremium.toLocaleString()}</span></div>
-    ${GAME.clients.length ? list : '<div class="empty-state">No clients yet. Head to Leads to start prospecting.</div>'}
-  `, `<button class="btn btn-small" onclick="closeModal()">CLOSE</button>`);
+  setDialogue('YOUR BOOK', body, menu, { npcPortrait: null });
 }
+
 function openClientDetail(id) {
+  pushDialogue(() => renderClientDetail(id));
+}
+function renderClientDetail(id) {
   const c = GAME.clients.find(x => x.id === id);
-  if (!c) return;
+  if (!c) { dlgBack(); return; }
   const line = LINES[c.lineId];
   const body = `
-    <div class="event-header">
-      <div class="portrait-frame small">${getPortraitSVG(c.portraitId)}</div>
-      <div><div style="font-weight:bold;">${c.name}</div><div class="event-cat">${line.name}</div></div>
-    </div>
+    <div class="detail-row"><span class="k">Line</span><span class="v">${line.name}</span></div>
     <div class="detail-row"><span class="k">Carrier</span><span class="v">${CARRIERS[c.carrierId].name}</span></div>
     <div class="detail-row"><span class="k">Premium</span><span class="v">$${c.premium.toLocaleString()}</span></div>
     <div class="detail-row"><span class="k">Your Commission</span><span class="v good">$${c.commission.toLocaleString()}</span></div>
@@ -425,24 +481,44 @@ function openClientDetail(id) {
     <div class="detail-row"><span class="k">Claims to Date</span><span class="v">${c.claims}</span></div>
     <div class="detail-row"><span class="k">Next Renewal</span><span class="v">Day ${c.renewalDay}</span></div>
   `;
-  openModal(c.name, body, `
-    <button class="btn btn-small btn-danger" onclick="doFireClient('${c.id}')">FIRE CLIENT</button>
-    <button class="btn btn-small" onclick="openClients()">BACK</button>
-  `);
+  const menu = menuRow('Fire Client', `doFireClient('${c.id}')`, { mod: 'danger' });
+  setDialogue(c.name, body, menu, { npcPortrait: c.portraitId });
 }
 function doFireClient(id) {
   const c = GAME.clients.find(x => x.id === id);
-  showConfirm('Fire this client?', `Are you sure you want to let ${c.name} go? This removes them from your book immediately.`, () => {
-    loseClient(GAME, c, 'fired by agent');
-    toast(`${c.name} has been let go.`);
-    openClients();
-    refreshAll();
-  });
+  pushDialogue(() => renderConfirm(
+    'Fire this client?',
+    `Are you sure you want to let ${c.name} go? This removes them from your book immediately.`,
+    () => {
+      loseClient(GAME, c, 'fired by agent');
+      toast(`${c.name} has been let go.`);
+      NAV_STACK = [];
+      pushDialogue(renderClientsList);
+      refreshAll();
+    }
+  ));
+}
+
+// Generic in-dialogue Yes/No confirm screen (used once pushed onto the stack)
+function renderConfirm(title, msg, onYes) {
+  const body = `<div class="dialogue-text">${msg}</div>`;
+  window.__pendingConfirmYes = onYes;
+  const menu =
+    menuRow('Yes', `__runPendingConfirm()`, { mod: 'danger' }) +
+    menuRow('Cancel', `dlgBack()`);
+  setDialogue(title, body, menu);
+}
+function __runPendingConfirm() {
+  const fn = window.__pendingConfirmYes;
+  window.__pendingConfirmYes = null;
+  if (fn) fn();
 }
 
 // ---------------- MARKET ----------------
 function openMarket() {
-  setActiveNav('market');
+  pushDialogue(renderMarket);
+}
+function renderMarket() {
   const rows = Object.values(LINES).map(l => {
     const val = GAME.market[l.id];
     const pct = Math.round((val - 1) * 100);
@@ -453,24 +529,20 @@ function openMarket() {
   const relRows = Object.values(CARRIERS).map(c => `
     <div class="detail-row"><span class="k">${c.name}</span><span class="v">${GAME.carrierRelationships[c.id]}/100</span></div>
   `).join('');
-  openModal('MARKET CONDITIONS', `
-    <div class="section-label">Appetite by Line</div>
-    ${rows}
-    <div class="section-label">Carrier Relationships</div>
-    ${relRows}
-  `, `<button class="btn btn-small" onclick="closeModal()">CLOSE</button>`);
+  const body = `<div class="section-label">Appetite by Line</div>${rows}<div class="section-label">Carrier Relationships</div>${relRows}`;
+  setDialogue('MARKET CONDITIONS', body, '', { npcPortrait: null });
 }
 
 // ---------------- NETWORKING / DESK ----------------
 function openNetworking() {
-  const body = `
-    <p>Spend time working the phones for referrals, catching up on admin, or just taking a breather.</p>
-  `;
-  openModal('DESK', body, `
-    <button class="btn btn-small btn-gold" onclick="doNetwork()">NETWORK FOR LEADS (−2 Time)</button>
-    <button class="btn btn-small" onclick="doTakeBreather()">TAKE A BREATHER (−1 Time, +Sanity)</button>
-    <button class="btn btn-small" onclick="closeModal()">CLOSE</button>
-  `);
+  pushDialogue(renderNetworking);
+}
+function renderNetworking() {
+  const body = `<div class="dialogue-text">Spend time working the phones for referrals, catching up on admin, or just taking a breather.</div>`;
+  const menu =
+    menuRow('Network for Leads', 'doNetwork()', { cost: '−2 Time', mod: 'gold' }) +
+    menuRow('Take a Breather', 'doTakeBreather()', { cost: '−1 Time, +Sanity' });
+  setDialogue('DESK', body, menu, { npcPortrait: null });
 }
 function doNetwork() {
   if (GAME.resources.time < 2) { toast('Not enough time.'); return; }
@@ -478,14 +550,16 @@ function doNetwork() {
   const newLeads = randInt(1, 2);
   for (let i = 0; i < newLeads; i++) GAME.prospects.push(generateProspect(GAME.meta.level));
   toast(`Found ${newLeads} new lead${newLeads > 1 ? 's' : ''}.`);
-  closeModal();
+  refreshAll();
+  dlgBack();
 }
 function doTakeBreather() {
   if (GAME.resources.time < 1) { toast('Not enough time.'); return; }
   GAME.resources.time -= 1;
   GAME.resources.sanity = clamp(GAME.resources.sanity + 8, 0, 100);
   toast('You took a breather. Sanity restored a bit.');
-  closeModal();
+  refreshAll();
+  dlgBack();
 }
 
 // ---------------- STAFF (Level 2 preview) ----------------
@@ -496,120 +570,93 @@ const CANDIDATE_POOL = [
 ];
 
 function openStaff() {
-  setActiveNav('staff');
+  pushDialogue(renderStaffScreen);
+}
+function renderStaffScreen() {
   if (GAME.meta.level < 2) {
-    openModal('STAFF', `
-      <div class="empty-state">
-        You're still running solo at the borrowed desk.<br><br>
-        Hiring unlocks once you hit <b>Level 2: The Hustle</b> — grow your book to <b>$${LEVEL_GOALS[1].bookGoal.toLocaleString()}</b> to get there.
-        <br><br>Current book: <b>$${GAME.resources.bookPremium.toLocaleString()}</b>
-      </div>
-    `, `<button class="btn btn-small" onclick="closeModal()">CLOSE</button>`);
+    const body = `<div class="empty-state">
+      You're still running solo at the borrowed desk.<br><br>
+      Hiring unlocks once you hit <b>Level 2: The Hustle</b> — grow your book to <b>$${LEVEL_GOALS[1].bookGoal.toLocaleString()}</b> to get there.
+      <br><br>Current book: <b>$${GAME.resources.bookPremium.toLocaleString()}</b>
+    </div>`;
+    setDialogue('STAFF', body, '', { npcPortrait: null });
     return;
   }
-  renderStaffScreen();
-}
-
-function renderStaffScreen() {
-  const hired = GAME.employees.map(e => `
-    <div class="list-item">
-      <div class="li-body">
-        <div class="li-title">${e.name} — ${e.role}</div>
-        <div class="li-sub">${e.impact} · $${e.salary.toLocaleString()}/yr</div>
-      </div>
-    </div>
-  `).join('');
-  const candidates = CANDIDATE_POOL.filter(c => !GAME.employees.some(e => e.id === c.id)).map(c => `
-    <div class="list-item" onclick="openHireDetail('${c.id}')">
-      <div class="li-body">
-        <div class="li-title">${c.name}</div>
-        <div class="li-sub">${c.role} · $${c.salary.toLocaleString()}/yr</div>
-      </div>
-      <span class="li-tag">${'★'.repeat(c.skill)}</span>
-    </div>
-  `).join('');
-  openModal('STAFF', `
-    <div class="section-label">Your Team</div>
-    ${hired || '<div class="empty-state">No employees yet. You still do it all yourself.</div>'}
-    <div class="section-label">Candidates</div>
-    ${candidates || '<div class="empty-state">No candidates available right now.</div>'}
-  `, `<button class="btn btn-small" onclick="closeModal()">CLOSE</button>`);
+  const hiredHtml = GAME.employees.length
+    ? GAME.employees.map(e => `<div class="detail-row"><span class="k">${e.name} — ${e.role}</span><span class="v">$${e.salary.toLocaleString()}/yr</span></div>`).join('')
+    : '<div class="empty-state">No employees yet. You still do it all yourself.</div>';
+  const body = `<div class="section-label">Your Team</div>${hiredHtml}<div class="section-label">Candidates</div>`;
+  const candidates = CANDIDATE_POOL.filter(c => !GAME.employees.some(e => e.id === c.id));
+  const menu = candidates.length
+    ? candidates.map(c => menuRow(c.name, `openHireDetail('${c.id}')`, { sub: `${c.role} · $${c.salary.toLocaleString()}/yr`, tag: '★'.repeat(c.skill) })).join('')
+    : '';
+  setDialogue('STAFF', body + (candidates.length ? '' : '<div class="empty-state">No candidates available right now.</div>'), menu, { npcPortrait: null });
 }
 
 function openHireDetail(id) {
+  pushDialogue(() => renderHireDetail(id));
+}
+function renderHireDetail(id) {
   const c = CANDIDATE_POOL.find(x => x.id === id);
   const body = `
-    <div class="event-header">
-      <div class="portrait-frame small">${getPortraitSVG(getClientPortraitId(id))}</div>
-      <div><div style="font-weight:bold;">${c.name}</div><div class="event-cat">${c.role}</div></div>
-    </div>
+    <div class="detail-row"><span class="k">Role</span><span class="v">${c.role}</span></div>
     <div class="detail-row"><span class="k">Salary</span><span class="v">$${c.salary.toLocaleString()}/yr</span></div>
     <div class="detail-row"><span class="k">Skill</span><span class="v">${'★'.repeat(c.skill)}${'☆'.repeat(5 - c.skill)}</span></div>
     <div class="detail-row"><span class="k">Impact</span><span class="v">${c.impact}</span></div>
   `;
-  openModal(c.name, body, `
-    <button class="btn btn-small btn-primary" onclick="doHire('${id}')">HIRE</button>
-    <button class="btn btn-small" onclick="renderStaffScreen()">BACK</button>
-  `);
+  const menu = menuRow('Hire', `doHire('${id}')`, { mod: 'primary' });
+  setDialogue(c.name, body, menu, { npcPortrait: getClientPortraitId(id) });
 }
-
 function doHire(id) {
   const c = CANDIDATE_POOL.find(x => x.id === id);
   GAME.employees.push({ ...c, hiredDay: GAME.meta.day });
   toast(`${c.name} joins the agency!`);
   log(GAME, `Hired ${c.name} as ${c.role}.`);
-  renderStaffScreen();
   refreshAll();
+  NAV_STACK = [];
+  pushDialogue(renderStaffScreen);
 }
 
 // ---------------- LEVEL UP ----------------
-function showLevelUpModal() {
+function renderLevelUp() {
   const goal = LEVEL_GOALS[GAME.meta.level];
-  openModal('LEVEL UP!', `
+  const body = `
     <div style="text-align:center;">
-      <div style="font-size:2rem;margin-bottom:8px;">🎉</div>
-      <div style="font-size:1.1rem;font-weight:bold;color:var(--wood);">Level ${GAME.meta.level}${goal ? ': ' + goal.name : ''}</div>
-      <p style="margin-top:10px;">Your book has grown. New opportunities — and new problems — are opening up.</p>
-      ${GAME.meta.level === 2 ? '<p><b>Unlocked:</b> Hiring your first employee (STAFF tab).</p>' : ''}
+      <div style="font-size:1.8rem;margin-bottom:6px;">🎉</div>
+      <div style="font-size:1rem;font-weight:bold;color:var(--wood);">Level ${GAME.meta.level}${goal ? ': ' + goal.name : ''}</div>
+      <div class="dialogue-text" style="margin-top:8px;">Your book has grown. New opportunities — and new problems — are opening up.</div>
+      ${GAME.meta.level === 2 ? '<div class="dialogue-text"><b>Unlocked:</b> Hiring your first employee (via Staff).</div>' : ''}
     </div>
-  `, `<button class="btn btn-small btn-primary" onclick="closeModal()">LET'S GO</button>`);
+  `;
+  const menu = menuRow("Let's Go", 'closeModal()', { mod: 'primary' });
+  setDialogue('LEVEL UP!', body, menu, { npcPortrait: null });
 }
 
 // ---------------- RANDOM EVENTS ----------------
-function maybeTriggerDailyEvent() {
-  if (Math.random() > 0.7) return; // not every day
-  const roll = rollDailyEvent(GAME);
-  if (!roll) return;
-  showEventModal(roll);
+function maybeGetDailyEvent() {
+  if (Math.random() > 0.7) return null;
+  return rollDailyEvent(GAME);
 }
 
-function showEventModal({ scenario, subject, isTuesday }) {
+function renderEvent(roll) {
+  const { scenario, subject, isTuesday } = roll;
   const setupText = typeof scenario.setup === 'function' ? scenario.setup(GAME, subject || {}) : scenario.setup;
   const stars = scenario.stars > 0 ? '★'.repeat(scenario.stars) : '✦';
   const portraitId = subject && subject.portraitId ? subject.portraitId : (subject && subject.id ? getClientPortraitId(subject.id) : null);
 
   let body = `
-    <div class="event-header">
-      ${portraitId ? `<div class="portrait-frame small">${getPortraitSVG(portraitId)}</div>` : ''}
-      <div>
-        <div class="event-stars">${stars}</div>
-        <div class="event-cat">${scenario.category}${isTuesday ? ' · TUESDAY' : ''}</div>
-      </div>
+    <div class="dialogue-header-row">
+      <div><div class="dialogue-stars">${stars}</div><div class="dialogue-cat">${scenario.category}${isTuesday ? ' · TUESDAY' : ''}</div></div>
     </div>
-    <p>${setupText}</p>
+    <div class="dialogue-text">${setupText}</div>
   `;
-  if (isTuesday) body += `<p style="color:var(--red);font-weight:bold;">It's one of those days. More is happening than you have time for.</p>`;
+  if (isTuesday) body += `<div class="dialogue-text" style="color:var(--red);font-weight:bold;">It's one of those days. More is happening than you have time for.</div>`;
 
-  const footer = scenario.choices.map((choice, i) => {
-    const costStr = choice.cost && choice.cost.time ? ` <span class="choice-cost">(−${choice.cost.time} Time)</span>` : '';
-    return `<button class="choice-btn" onclick="resolveEventChoice(${i})">${choice.label}${costStr}</button>`;
+  const menu = scenario.choices.map((choice, i) => {
+    return menuRow(choice.label, `resolveEventChoice(${i})`, choice.cost && choice.cost.time ? { cost: `−${choice.cost.time} Time` } : {});
   }).join('');
 
-  document.getElementById('modal-title').textContent = 'EVENT';
-  document.getElementById('modal-body').innerHTML = body;
-  document.getElementById('modal-footer').innerHTML = `<div style="width:100%;">${footer}</div>`;
-  document.getElementById('modal-overlay').classList.add('active');
-
+  setDialogue('EVENT', body, menu, { npcPortrait: portraitId });
   GAME.pendingEvent = { scenario, subject };
 }
 
@@ -621,51 +668,62 @@ function resolveEventChoice(index) {
   }
   choice.effects(GAME, subject);
   GAME.pendingEvent = null;
-  closeModal();
   checkGameOverAndRender();
+  NAV_STACK = [];
+  renderMainMenu();
 }
 
 // ---------------- END DAY ----------------
 function confirmEndDay() {
-  showConfirm('End the day?', `You have ${GAME.resources.time} time left unused. Ending the day resets your time and advances the calendar.`, () => {
-    endDay(GAME);
-    refreshTopbar();
-    refreshStatStrip();
-    checkGameOverAndRender();
-    if (!GAME.flags.justLeveledUp) {
-      setTimeout(maybeTriggerDailyEvent, 300);
-    } else {
-      GAME.flags.justLeveledUp = false;
-      setTimeout(showLevelUpModal, 300);
+  pushDialogue(() => renderConfirm(
+    'End the day?',
+    `You have ${GAME.resources.time} time left unused. Ending the day resets your time and advances the calendar.`,
+    () => {
+      endDay(GAME);
+      refreshTopbar();
+      refreshStatStrip();
+      checkGameOverAndRender();
+      NAV_STACK = [];
+      if (GAME.flags.justLeveledUp) {
+        GAME.flags.justLeveledUp = false;
+        pushDialogue(renderLevelUp);
+      } else {
+        const eventRoll = maybeGetDailyEvent();
+        if (eventRoll) pushDialogue(() => renderEvent(eventRoll));
+        else renderMainMenu();
+      }
     }
-  });
+  ));
 }
 
 function checkGameOverAndRender() {
   refreshAll();
   const over = isGameOver(GAME);
   if (over.over) {
-    showGameOver(over.reason);
+    NAV_STACK = [];
+    pushDialogue(() => renderGameOver(over.reason));
   }
 }
 
-function showGameOver(reason) {
+function renderGameOver(reason) {
   const msg = reason === 'bankruptcy'
     ? 'The agency has run out of cash and cannot continue operating.'
     : 'An unresolved E&O exposure has become a catastrophic claim. The agency cannot recover.';
-  openModal('GAME OVER', `
+  const body = `
     <div style="text-align:center;">
-      <div style="font-size:2rem;">💼</div>
-      <p>${msg}</p>
-      <p>Final book: $${GAME.resources.bookPremium.toLocaleString()} · Clients served: ${GAME.stats.clientsWon}</p>
+      <div style="font-size:1.8rem;">💼</div>
+      <div class="dialogue-text">${msg}</div>
+      <div class="dialogue-text">Final book: $${GAME.resources.bookPremium.toLocaleString()} · Clients served: ${GAME.stats.clientsWon}</div>
     </div>
-  `, `<button class="btn btn-small btn-danger" onclick="restartAfterGameOver()">START OVER</button>`);
+  `;
+  const menu = menuRow('Start Over', 'restartAfterGameOver()', { mod: 'danger' });
+  setDialogue('GAME OVER', body, menu, { npcPortrait: null });
 }
 
 function restartAfterGameOver() {
   deleteSave();
   GAME = null;
-  closeModal();
+  NAV_STACK = [];
   showScreen('screen-title');
   document.getElementById('btn-continue').style.display = 'none';
   document.getElementById('btn-reset').style.display = 'none';

@@ -2,14 +2,14 @@
 // HARD MARKET — OFFICE SCENE ART
 // Level 1: "The Borrowed Desk" — single small office.
 //
-// SCENE_ART_URL: set this to a path (e.g. 'assets/office-level1.png')
+// SCENE_ART_URL: set this to a path (e.g. 'assets/office-level1.jpg')
 // once you have an AI-generated / illustrated background for this
 // level, and buildOfficeScene() in main.js will use it automatically
 // in place of the placeholder SVG below — no other code changes needed.
 // Recommended: landscape, ~1600x900+ so it stays crisp when scaled.
 // ============================================================
 
-const SCENE_ART_URL = null; // e.g. 'assets/office-level1.png'
+const SCENE_ART_URL = 'assets/office-level1.jpg';
 
 
 function officeBackgroundLevel1() {
@@ -121,19 +121,24 @@ function officeBackgroundLevel1() {
 }
 
 // Hotspot definitions: position as % of scene box (left/top), sized for touch.
+// Coordinates tuned against assets/office-level1.jpg (red phone, notepad,
+// papers tray, filing cabinet, open desk-front floor). If you swap in a
+// different piece of art, these will need re-tuning to match.
 const OFFICE_HOTSPOTS_L1 = [
-  { id: 'phone', label: 'PHONE', left: '44%', top: '55%', width: '11%', height: '13%', standLeft: '38%', standTop: '68%' },
-  { id: 'computer', label: 'COMPUTER', left: '62%', top: '42%', width: '14%', height: '18%', standLeft: '66%', standTop: '68%' },
-  { id: 'files', label: 'FILES', left: '8%', top: '55%', width: '13%', height: '24%', standLeft: '15%', standTop: '75%' },
-  { id: 'desk', label: 'NETWORK', left: '55%', top: '85%', width: '15%', height: '10%', standLeft: '58%', standTop: '80%' },
+  { id: 'phone', label: 'LEADS', left: '27%', top: '49%', width: '11%', height: '16%' },
+  { id: 'notepad', label: 'BOOK', left: '46%', top: '53%', width: '12%', height: '11%' },
+  { id: 'reports', label: 'MARKET', left: '64%', top: '48%', width: '11%', height: '14%' },
+  { id: 'cabinet', label: 'STAFF', left: '4%', top: '23%', width: '15%', height: '48%' },
+  { id: 'deskfront', label: 'NETWORK', left: '33%', top: '82%', width: '22%', height: '11%' },
 ];
 
 function hotspotIconSVG(id) {
   const icons = {
     phone: `<svg viewBox="0 0 24 24" fill="none" stroke="#f0c445" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>`,
-    computer: `<svg viewBox="0 0 24 24" fill="none" stroke="#f0c445" stroke-width="2"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></svg>`,
-    files: `<svg viewBox="0 0 24 24" fill="none" stroke="#f0c445" stroke-width="2"><path d="M3 7v13a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-8l-2-2H5a2 2 0 00-2 2z"/></svg>`,
-    desk: `<svg viewBox="0 0 24 24" fill="none" stroke="#f0c445" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0116 0v1"/></svg>`,
+    notepad: `<svg viewBox="0 0 24 24" fill="none" stroke="#f0c445" stroke-width="2"><path d="M11 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4z"/></svg>`,
+    reports: `<svg viewBox="0 0 24 24" fill="none" stroke="#f0c445" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-4 4"/></svg>`,
+    cabinet: `<svg viewBox="0 0 24 24" fill="none" stroke="#f0c445" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>`,
+    deskfront: `<svg viewBox="0 0 24 24" fill="none" stroke="#f0c445" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0116 0v1"/></svg>`,
   };
   return icons[id] || '';
 }

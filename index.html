@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Hard Market: An Insurance Agency Sim</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="game-root">
+
+  <!-- ============ TITLE SCREEN ============ -->
+  <div class="screen active" id="screen-title">
+    <div class="title-logo pixel-font">HARD MARKET</div>
+    <div class="title-sub">AN INSURANCE AGENCY SIM</div>
+    <div class="title-tagline">"Build the book. Fight for the client. Survive renewal."</div>
+    <div class="title-menu">
+      <button class="btn btn-primary" onclick="startNewGameFlow()">NEW GAME</button>
+      <button class="btn" id="btn-continue" onclick="continueGame()" style="display:none;">CONTINUE</button>
+      <button class="btn btn-small" id="btn-reset" onclick="confirmReset()" style="display:none;">RESET SAVE</button>
+    </div>
+  </div>
+
+  <!-- ============ CHARACTER SELECT ============ -->
+  <div class="screen select-screen" id="screen-character">
+    <div class="select-header pixel-font">CHOOSE YOUR AGENT</div>
+    <div class="select-subheader">Every agent has an edge. Pick yours.</div>
+    <div class="card-grid" id="character-cards"></div>
+    <button class="btn btn-primary" style="margin-top:16px;" id="btn-character-next" disabled onclick="goToCareerSelect()">NEXT</button>
+  </div>
+
+  <!-- ============ CAREER SELECT ============ -->
+  <div class="screen select-screen" id="screen-career">
+    <div class="select-header pixel-font">CHOOSE YOUR PATH</div>
+    <div class="select-subheader">This shapes leads, appetite, and difficulty.</div>
+    <div class="card-grid" id="career-cards"></div>
+    <button class="btn btn-primary" style="margin-top:16px;" id="btn-career-next" disabled onclick="beginGame()">START AGENCY</button>
+  </div>
+
+  <!-- ============ MAIN OFFICE SCREEN ============ -->
+  <div class="screen" id="screen-office">
+    <div class="topbar">
+      <span class="topbar-title pixel-font">HARD MARKET</span>
+      <span class="topbar-date" id="topbar-date">Day 1 · Week 1 · Level 1</span>
+    </div>
+
+    <div class="office-scene" id="office-scene">
+      <!-- office SVG + hotspots injected by JS -->
+    </div>
+
+    <div class="stat-strip" id="stat-strip"></div>
+
+    <div class="nav-bar">
+      <button class="nav-btn active" data-nav="office" onclick="showOfficeHome()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/></svg>
+        OFFICE
+      </button>
+      <button class="nav-btn" data-nav="prospects" onclick="openProspects()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        LEADS
+      </button>
+      <button class="nav-btn" data-nav="clients" onclick="openClients()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        BOOK
+      </button>
+      <button class="nav-btn" data-nav="market" onclick="openMarket()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-4 4"/></svg>
+        MARKET
+      </button>
+      <button class="nav-btn" data-nav="staff" onclick="openStaff()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
+        STAFF
+      </button>
+      <button class="nav-btn" data-nav="endday" onclick="confirmEndDay()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        END DAY
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ LOADING ============ -->
+  <div class="screen" id="screen-loading">
+    <div class="title-sub">LOADING...</div>
+  </div>
+
+</div>
+
+<!-- ============ GENERIC MODAL ============ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-box" id="modal-box">
+    <div class="modal-header">
+      <span id="modal-title" class="pixel-font">TITLE</span>
+      <button class="modal-close" id="modal-close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script src="js/data.js"></script>
+<script src="js/events.js"></script>
+<script src="js/art/portraits.js"></script>
+<script src="js/art/office.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

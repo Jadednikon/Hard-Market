@@ -1,8 +1,16 @@
 // ============================================================
 // HARD MARKET — OFFICE SCENE ART
 // Level 1: "The Borrowed Desk" — single small office.
-// Returns SVG background (viewBox 0 0 400 240) + hotspot coordinate map (in %).
+//
+// SCENE_ART_URL: set this to a path (e.g. 'assets/office-level1.png')
+// once you have an AI-generated / illustrated background for this
+// level, and buildOfficeScene() in main.js will use it automatically
+// in place of the placeholder SVG below — no other code changes needed.
+// Recommended: landscape, ~1600x900+ so it stays crisp when scaled.
 // ============================================================
+
+const SCENE_ART_URL = null; // e.g. 'assets/office-level1.png'
+
 
 function officeBackgroundLevel1() {
   return `<svg viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" preserveAspectRatio="xMidYMax slice" style="width:100%;height:100%;">

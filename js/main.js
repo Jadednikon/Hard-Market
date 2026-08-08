@@ -40,7 +40,7 @@ function renderCharacterCards() {
   const grid = document.getElementById('character-cards');
   grid.innerHTML = CHARACTERS.map(c => `
     <div class="select-card" id="char-card-${c.id}" onclick="selectCharacter('${c.id}')">
-      <div class="portrait-frame">${getPortraitSVG(c.id)}</div>
+      <div class="portrait-frame"><img src="assets/portraits/${c.id}-neutral.jpg" alt="${c.name}" style="width:100%;height:100%;object-fit:cover;"></div>
       <div class="select-card-body">
         <div class="select-card-title">${c.name} — ${c.title}</div>
         <div class="select-card-desc">${c.desc}</div>
@@ -130,6 +130,10 @@ function enterOffice() {
   }
 }
 
+// Player's seat at the desk: percentage box tuned against the chair in
+// assets/office-level1.jpg. Swap art here if you swap the scene image.
+const PLAYER_DESK_BOX = { left: 37, top: 24, width: 18, height: 30 };
+
 function buildOfficeScene() {
   const scene = document.getElementById('office-scene');
   // Static scene art. Drop a real illustrated PNG/JPG in assets/ and point
@@ -138,7 +142,20 @@ function buildOfficeScene() {
   const artHtml = (typeof SCENE_ART_URL !== 'undefined' && SCENE_ART_URL)
     ? `<img class="scene-art" src="${SCENE_ART_URL}" alt="Office scene">`
     : `<div class="office-bg">${officeBackgroundLevel1()}</div>`;
-  scene.innerHTML = artHtml + `<div class="npc-portrait-inset" id="npc-portrait-inset"></div>`;
+
+  const characterId = GAME ? GAME.meta.characterId : 'alex';
+  const deskPortraitHtml = `
+    <div class="player-desk-portrait" id="player-desk-portrait">
+      <img id="player-desk-img" src="assets/portraits/${characterId}-neutral.jpg" alt="You">
+    </div>`;
+
+  scene.innerHTML = artHtml + deskPortraitHtml + `<div class="npc-portrait-inset" id="npc-portrait-inset"></div>`;
+
+  const deskEl = document.getElementById('player-desk-portrait');
+  deskEl.dataset.pctLeft = PLAYER_DESK_BOX.left;
+  deskEl.dataset.pctTop = PLAYER_DESK_BOX.top;
+  deskEl.dataset.pctWidth = PLAYER_DESK_BOX.width;
+  deskEl.dataset.pctHeight = PLAYER_DESK_BOX.height;
 
   OFFICE_HOTSPOTS_L1.forEach(h => {
     const el = document.createElement('div');
@@ -163,6 +180,13 @@ function buildOfficeScene() {
   } else {
     repositionSceneMarkers(); // SVG placeholder fills the box edge-to-edge, no letterbox math needed
   }
+}
+
+// Sets the desk portrait's expression. mood: 'neutral' | 'happy' | 'sad'
+function setPlayerDeskMood(mood) {
+  const img = document.getElementById('player-desk-img');
+  if (!img || !GAME) return;
+  img.src = `assets/portraits/${GAME.meta.characterId}-${mood}.jpg`;
 }
 
 // Recomputes marker pixel positions against the ACTUAL visible image content
@@ -211,6 +235,19 @@ function repositionSceneMarkers() {
     el.style.width = ((pctW / 100) * contentW) + 'px';
     el.style.height = ((pctH / 100) * contentH) + 'px';
   });
+
+  // Same letterbox-aware positioning for the player's seat at the desk.
+  const deskEl = document.getElementById('player-desk-portrait');
+  if (deskEl) {
+    const pctLeft = parseFloat(deskEl.dataset.pctLeft) || 0;
+    const pctTop = parseFloat(deskEl.dataset.pctTop) || 0;
+    const pctW = parseFloat(deskEl.dataset.pctWidth) || 15;
+    const pctH = parseFloat(deskEl.dataset.pctHeight) || 25;
+    deskEl.style.left = (offsetX + (pctLeft / 100) * contentW) + 'px';
+    deskEl.style.top = (offsetY + (pctTop / 100) * contentH) + 'px';
+    deskEl.style.width = ((pctW / 100) * contentW) + 'px';
+    deskEl.style.height = ((pctH / 100) * contentH) + 'px';
+  }
 }
 
 window.addEventListener('resize', () => {
@@ -244,24 +281,26 @@ function setNpcPortrait(portraitId) {
 // to whatever should normally be showing (self, or the NPC being talked to).
 // Locks the portrait display for its duration — any setDialogue() calls that
 // happen while it's playing just update the pending target, not interrupt it.
+let _reactionRevertTimer = null;
+
+// Brief happy/sad expression swap on the player's desk portrait, then
+// settles back to neutral. The corner box (NPC-only now) is untouched.
 function showReaction(type) {
   if (!GAME) return;
-  const el = document.getElementById('npc-portrait-inset');
+  const el = document.getElementById('player-desk-portrait');
   if (!el) return;
   const mood = type === 'happy' ? 'happy' : type === 'sad' ? 'sad' : null;
   if (!mood) return;
 
-  el.innerHTML = getCharacterPortraitSVG(GAME.meta.characterId, mood);
-  el.classList.add('show', 'reacting');
+  setPlayerDeskMood(mood);
+  el.classList.add('reacting');
   el.classList.remove('happy', 'sad');
   el.classList.add(mood);
-  _reactionActive = true;
 
   clearTimeout(_reactionRevertTimer);
   _reactionRevertTimer = setTimeout(() => {
-    _reactionActive = false;
     el.classList.remove('reacting', 'happy', 'sad');
-    setNpcPortrait(CURRENT_PORTRAIT_ID);
+    setPlayerDeskMood('neutral');
   }, 1300);
 }
 
@@ -312,25 +351,19 @@ function refreshAll() {
 // menu if the stack is empty).
 // ================================================================
 
-let CURRENT_PORTRAIT_ID = null; // whatever should be showing in the corner box right now (self or NPC)
-let _reactionRevertTimer = null;
-let _reactionActive = false; // while true, setDialogue() must NOT overwrite the portrait mid-reaction
+let CURRENT_PORTRAIT_ID = null; // whatever NPC should be showing in the corner box right now (null = no one)
 
 function setDialogue(title, bodyHtml, menuHtml, opts = {}) {
   document.getElementById('dlg-title').textContent = title;
   document.getElementById('dlg-body').innerHTML = bodyHtml;
   document.getElementById('dlg-menu').innerHTML = menuHtml;
   document.getElementById('dlg-back-btn').style.display = NAV_STACK.length > 0 ? '' : 'none';
-  // Default to showing the PLAYER'S OWN chosen agent portrait whenever no
-  // specific NPC (client/underwriter/candidate) is being talked to, instead
-  // of leaving the corner blank — "you" should always be represented.
-  const resolvedPortrait = (opts.npcPortrait !== undefined && opts.npcPortrait !== null)
-    ? opts.npcPortrait
-    : (GAME ? GAME.meta.characterId : null);
+  // The player now has a permanent seat at the desk (see player-desk-portrait),
+  // so this corner box is NPC-only: shown only while talking to a specific
+  // client/underwriter/candidate, hidden the rest of the time.
+  const resolvedPortrait = (opts.npcPortrait !== undefined && opts.npcPortrait !== null) ? opts.npcPortrait : null;
   CURRENT_PORTRAIT_ID = resolvedPortrait;
-  // If a reaction is actively playing, don't cut it off — just record what
-  // it should revert to. Its own timer applies this once it finishes.
-  if (!_reactionActive) setNpcPortrait(resolvedPortrait);
+  setNpcPortrait(resolvedPortrait);
 }
 
 // Push current-and-new: call with the render fn for the screen you're navigating TO.

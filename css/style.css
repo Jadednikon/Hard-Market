@@ -32,6 +32,46 @@
     touch-action: manipulation;
   }
 
+  /* ============ ROTATE DEVICE OVERLAY ============ */
+  #rotate-overlay {
+    position: fixed; inset: 0;
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    background: var(--navy-deep);
+    color: var(--cream);
+    text-align: center;
+    padding: 24px;
+  }
+  .rotate-icon {
+    width: 64px; height: 64px;
+    color: var(--gold-bright);
+    margin-bottom: 18px;
+    animation: rotate-nudge 1.8s ease-in-out infinite;
+  }
+  @keyframes rotate-nudge {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(-90deg); }
+  }
+  .rotate-arrows { opacity: 0.5; }
+  .rotate-title {
+    font-size: 1.1rem;
+    color: var(--gold-bright);
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+  .rotate-sub {
+    font-size: 0.8rem;
+    color: var(--tan);
+    line-height: 1.6;
+    max-width: 320px;
+  }
+
+  /* Phones/tablets in portrait: block play and show the rotate prompt.
+     Scoped to touch devices + narrower windows so a deliberately-narrowed
+     desktop browser window isn't forced to show this. */
+
   /* Outer letterbox area - fills the real browser viewport on any device */
   #app-shell {
     position: fixed; inset: 0;
@@ -62,6 +102,43 @@
 
   @media (min-width: 561px) {
     #game-root { border-left: 3px solid var(--gold); border-right: 3px solid var(--gold); }
+  }
+
+  /* This must come AFTER the #app-shell / #rotate-overlay base rules above:
+     equal-specificity ID selectors resolve by source order, so placing the
+     override earlier would get silently clobbered by the base rule. */
+  @media (orientation: portrait) and (pointer: coarse) {
+    #rotate-overlay { display: flex; }
+    #app-shell { display: none; }
+  }
+
+  /* Landscape: widen the frame and let the office screen use a
+     side-by-side layout instead of the portrait vertical stack. */
+  @media (orientation: landscape) {
+    #game-root { max-width: 900px; border-top: 3px solid var(--gold); border-bottom: 3px solid var(--gold); border-left: none; border-right: none; }
+  }
+  @media (orientation: landscape) and (max-height: 500px) {
+    #game-root { max-width: 960px; }
+  }
+
+  /* Landscape office layout: scene on the left spanning full height,
+     topbar/stats/dialogue stacked on the right — makes real use of
+     the width instead of just being a wider portrait column. */
+  @media (orientation: landscape) {
+    #screen-office.active {
+      display: grid;
+      grid-template-columns: 42% 1fr;
+      grid-template-rows: auto auto 1fr;
+      grid-template-areas:
+        "topbar topbar"
+        "scene  stat"
+        "scene  dock";
+      height: 100%;
+    }
+    #screen-office .topbar { grid-area: topbar; }
+    #screen-office .office-scene { grid-area: scene; aspect-ratio: unset; width: 100%; height: 100%; }
+    #screen-office .stat-strip { grid-area: stat; grid-template-columns: 1fr 1fr 1fr; }
+    #screen-office .dialogue-dock { grid-area: dock; min-height: 0; }
   }
 
   .pixel-font {

@@ -132,8 +132,9 @@ function enterOffice() {
 
 function buildOfficeScene() {
   const scene = document.getElementById('office-scene');
-  // Static scene art. Drop a real illustrated PNG in assets/ and point SCENE_ART_URL
-  // at it (see js/art/office.js) to replace this placeholder SVG with zero other changes.
+  // Static scene art. Drop a real illustrated PNG/JPG in assets/ and point
+  // SCENE_ART_URL at it (see js/art/office.js) to replace the placeholder
+  // SVG with zero other changes.
   const artHtml = (typeof SCENE_ART_URL !== 'undefined' && SCENE_ART_URL)
     ? `<img class="scene-art" src="${SCENE_ART_URL}" alt="Office scene">`
     : `<div class="office-bg">${officeBackgroundLevel1()}</div>`;
@@ -142,19 +143,89 @@ function buildOfficeScene() {
   OFFICE_HOTSPOTS_L1.forEach(h => {
     const el = document.createElement('div');
     el.className = 'scene-marker';
-    el.style.left = h.left; el.style.top = h.top;
-    el.style.width = h.width; el.style.height = h.height;
+    // Store the tuned percentages as data attrs; actual px position gets
+    // computed against the real rendered image bounds (see below), since
+    // the image can be letterboxed (object-fit: contain, in landscape)
+    // and simple % of the container would drift off the artwork.
+    el.dataset.pctLeft = parseFloat(h.left);
+    el.dataset.pctTop = parseFloat(h.top);
+    el.dataset.pctWidth = parseFloat(h.width);
+    el.dataset.pctHeight = parseFloat(h.height);
     el.innerHTML = `${hotspotIconSVG(h.id)}<span class="scene-marker-label">${h.label}</span>`;
     el.onclick = () => onSceneMarkerTap(h.id);
     scene.appendChild(el);
   });
+
+  const img = scene.querySelector('img.scene-art');
+  if (img) {
+    if (img.complete) repositionSceneMarkers();
+    else img.addEventListener('load', repositionSceneMarkers);
+  } else {
+    repositionSceneMarkers(); // SVG placeholder fills the box edge-to-edge, no letterbox math needed
+  }
 }
+
+// Recomputes marker pixel positions against the ACTUAL visible image content
+// rectangle (accounting for object-fit letterboxing), not just the raw
+// container box — otherwise markers drift off the art whenever the box's
+// aspect ratio doesn't match the image's.
+let _sceneResizeQueued = false;
+function repositionSceneMarkers() {
+  const scene = document.getElementById('office-scene');
+  if (!scene) return;
+  const img = scene.querySelector('img.scene-art');
+  const containerW = scene.clientWidth;
+  const containerH = scene.clientHeight;
+  if (!containerW || !containerH) return;
+
+  let contentW = containerW, contentH = containerH, offsetX = 0, offsetY = 0;
+
+  if (img) {
+    const isLandscapeSplit = window.matchMedia('(orientation: landscape)').matches;
+    const naturalW = img.naturalWidth || 1672;
+    const naturalH = img.naturalHeight || 941;
+    const imgAspect = naturalW / naturalH;
+    const containerAspect = containerW / containerH;
+
+    // landscape uses object-fit:contain (whole image always visible, letterboxed);
+    // portrait uses object-fit:cover (image fills the box, edges may crop)
+    const fitsByHeight = isLandscapeSplit ? (containerAspect > imgAspect) : (containerAspect <= imgAspect);
+    if (fitsByHeight) {
+      contentH = containerH;
+      contentW = containerH * imgAspect;
+    } else {
+      contentW = containerW;
+      contentH = containerW / imgAspect;
+    }
+    offsetX = (containerW - contentW) / 2;
+    offsetY = (containerH - contentH) / 2;
+  }
+
+  scene.querySelectorAll('.scene-marker').forEach(el => {
+    const pctLeft = parseFloat(el.dataset.pctLeft) || 0;
+    const pctTop = parseFloat(el.dataset.pctTop) || 0;
+    const pctW = parseFloat(el.dataset.pctWidth) || 5;
+    const pctH = parseFloat(el.dataset.pctHeight) || 5;
+    el.style.left = (offsetX + (pctLeft / 100) * contentW) + 'px';
+    el.style.top = (offsetY + (pctTop / 100) * contentH) + 'px';
+    el.style.width = ((pctW / 100) * contentW) + 'px';
+    el.style.height = ((pctH / 100) * contentH) + 'px';
+  });
+}
+
+window.addEventListener('resize', () => {
+  if (_sceneResizeQueued) return;
+  _sceneResizeQueued = true;
+  requestAnimationFrame(() => { _sceneResizeQueued = false; repositionSceneMarkers(); });
+});
+window.addEventListener('orientationchange', () => setTimeout(repositionSceneMarkers, 150));
 
 function onSceneMarkerTap(id) {
   if (id === 'phone') openProspects();
-  else if (id === 'computer') openMarket();
-  else if (id === 'files') openClients();
-  else if (id === 'desk') openNetworking();
+  else if (id === 'reports') openMarket();
+  else if (id === 'notepad') openClients();
+  else if (id === 'cabinet') openStaff();
+  else if (id === 'deskfront') openNetworking();
 }
 
 function setNpcPortrait(portraitId) {

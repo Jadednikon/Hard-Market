@@ -23,7 +23,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   html, body {
-    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    margin: 0; padding: 0; height: 100dvh; overflow: hidden;
     background: var(--navy-deep);
     font-family: 'Courier New', monospace;
     color: var(--cream);
@@ -32,12 +32,36 @@
     touch-action: manipulation;
   }
 
-  #game-root {
+  /* Outer letterbox area - fills the real browser viewport on any device */
+  #app-shell {
     position: fixed; inset: 0;
-    padding-top: var(--safe-top); padding-bottom: var(--safe-bottom);
-    padding-left: var(--safe-left); padding-right: var(--safe-right);
+    height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at 50% 30%, #1c2d52 0%, #0b1220 70%);
+    overflow: hidden;
+  }
+
+  /* The actual game frame - fixed max width so desktop doesn't stretch into
+     a giant thin strip; fills full width/height on phones since they're
+     already narrower than the max-width. */
+  #game-root {
+    position: relative;
+    width: 100%;
+    max-width: 560px;
+    height: 100%;
+    max-height: 100dvh;
     display: flex; flex-direction: column;
     background: linear-gradient(180deg, var(--navy-deep) 0%, var(--navy) 100%);
+    padding-top: var(--safe-top); padding-bottom: var(--safe-bottom);
+    padding-left: var(--safe-left); padding-right: var(--safe-right);
+    box-shadow: 0 0 60px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+
+  @media (min-width: 561px) {
+    #game-root { border-left: 3px solid var(--gold); border-right: 3px solid var(--gold); }
   }
 
   .pixel-font {
@@ -60,8 +84,10 @@
   #screen-title {
     align-items: center; justify-content: center;
     background:
-      radial-gradient(ellipse at 50% 20%, rgba(212,167,44,0.15), transparent 60%),
-      linear-gradient(180deg, var(--navy-deep) 0%, var(--navy) 60%, var(--navy-mid) 100%);
+      linear-gradient(180deg, rgba(11,18,32,0.55) 0%, rgba(11,18,32,0.75) 55%, rgba(11,18,32,0.92) 100%),
+      url('assets/title-screen.jpg');
+    background-size: cover;
+    background-position: center 30%;
     text-align: center;
     padding: 20px;
     overflow-y: auto;
@@ -170,22 +196,24 @@
   .topbar-title { color: var(--gold-bright); font-size: 0.75rem; }
   .topbar-date { color: var(--tan); }
 
-  /* Static scene panel - top of screen, mostly illustrated/still */
+  /* Static scene panel - fixed aspect ratio so illustrated art always
+     displays proportionally correct instead of stretching/cropping
+     to fill whatever space is left over. */
   .office-scene {
     position: relative;
-    flex: 1 1 auto;
-    min-height: 0;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    flex-shrink: 0;
     background: linear-gradient(180deg, #3a2e1f 0%, #4a3826 55%, #6b4a2f 100%);
     background-size: cover;
     background-position: center;
     overflow: hidden;
-    image-rendering: pixelated;
   }
   .office-scene img.scene-art {
     position: absolute; inset: 0;
     width: 100%; height: 100%;
     object-fit: cover;
-    image-rendering: pixelated;
+    image-rendering: auto; /* these are high-res painted assets, not a raw low-res pixel grid */
   }
   .office-scene svg.office-bg { position: absolute; inset: 0; width: 100%; height: 100%; }
 
@@ -226,11 +254,11 @@
   .stat-strip {
     background: var(--navy-mid);
     border-top: 2px solid var(--wood);
-    padding: 6px 10px;
+    padding: 7px 10px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 3px 14px;
-    font-size: 0.58rem;
+    gap: 4px 14px;
+    font-size: 0.68rem;
     flex-shrink: 0;
   }
   .stat-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
@@ -241,13 +269,13 @@
 
   /* ============ GBA DIALOGUE BOX (docked, persistent, replaces modal popups) ============ */
   .dialogue-dock {
-    flex-shrink: 0;
+    flex: 1 1 auto;
+    min-height: 0;
     background: var(--cream);
     border-top: 4px solid var(--navy);
     box-shadow: 0 -2px 0 var(--gold) inset;
     display: flex;
     flex-direction: column;
-    max-height: 46vh;
   }
   .dialogue-frame {
     border: 3px solid var(--wood-dark);
@@ -262,21 +290,21 @@
   .dialogue-titlebar {
     background: var(--navy);
     color: var(--gold-bright);
-    font-size: 0.68rem;
+    font-size: 0.78rem;
     padding: 5px 10px;
     display: flex; justify-content: space-between; align-items: center;
     letter-spacing: 0.5px;
   }
   .dialogue-back-btn {
     background: none; border: none; color: var(--tan);
-    font-family: 'Courier New', monospace; font-size: 0.68rem;
+    font-family: 'Courier New', monospace; font-size: 0.74rem;
     cursor: pointer; padding: 2px 6px;
   }
   .dialogue-body {
-    padding: 10px 12px;
+    padding: 12px 14px;
     overflow-y: auto;
-    font-size: 0.76rem;
-    line-height: 1.5;
+    font-size: 0.87rem;
+    line-height: 1.55;
     color: var(--ink);
     flex: 1;
     min-height: 0;
@@ -295,10 +323,11 @@
     width: 100%; text-align: left;
     background: var(--cream);
     border: 2px solid var(--wood-dark);
-    padding: 8px 10px;
-    margin-bottom: 6px;
+    padding: 11px 12px;
+    margin-bottom: 7px;
     font-family: 'Courier New', monospace;
-    font-size: 0.76rem;
+    font-size: 0.87rem;
+    min-height: 44px;
     color: var(--ink);
     cursor: pointer;
   }
@@ -311,9 +340,9 @@
     opacity: 0;
   }
   .menu-row:active::before { opacity: 1; }
-  .menu-row .row-cost { margin-left: auto; color: var(--wood); font-size: 0.64rem; white-space: nowrap; }
+  .menu-row .row-cost { margin-left: auto; color: var(--wood); font-size: 0.72rem; white-space: nowrap; }
   .menu-row .row-tag {
-    margin-left: auto; font-size: 0.58rem; padding: 2px 5px;
+    margin-left: auto; font-size: 0.66rem; padding: 3px 6px;
     background: var(--navy-mid); color: var(--gold-bright); white-space: nowrap;
   }
   .menu-row .row-tag.easy { background: var(--green); color: white; }
@@ -328,7 +357,7 @@
 
   .menu-row-body { flex: 1; min-width: 0; }
   .menu-row-title { font-weight: bold; }
-  .menu-row-sub { font-size: 0.64rem; color: var(--wood); margin-top: 1px; }
+  .menu-row-sub { font-size: 0.72rem; color: var(--wood); margin-top: 2px; }
 
   .dialogue-portrait {
     width: 40px; height: 40px; flex-shrink: 0;
@@ -339,19 +368,19 @@
   .dialogue-portrait svg { width: 100%; height: 100%; }
   .dialogue-header-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
   .dialogue-stars { color: var(--gold); font-size: 0.85rem; letter-spacing: 2px; }
-  .dialogue-cat { font-size: 0.56rem; color: var(--wood); text-transform: uppercase; letter-spacing: 1px; }
+  .dialogue-cat { font-size: 0.64rem; color: var(--wood); text-transform: uppercase; letter-spacing: 1px; }
 
-  .detail-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed var(--tan-dark); font-size: 0.74rem; }
+  .detail-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed var(--tan-dark); font-size: 0.82rem; }
   .detail-row .k { color: var(--wood); }
   .detail-row .v { font-weight: bold; }
   .detail-row .v.good { color: var(--green); }
   .detail-row .v.bad { color: var(--red); }
 
-  .empty-state { text-align: center; padding: 20px 10px; color: var(--wood); font-size: 0.74rem; }
-  .section-label { font-size: 0.66rem; color: var(--wood); text-transform: uppercase; letter-spacing: 1px; margin: 10px 0 5px; }
+  .empty-state { text-align: center; padding: 24px 12px; color: var(--wood); font-size: 0.82rem; }
+  .section-label { font-size: 0.72rem; color: var(--wood); text-transform: uppercase; letter-spacing: 1px; margin: 12px 0 6px; }
   .section-label:first-child { margin-top: 0; }
 
-  .toast-container { position: fixed; top: calc(10px + var(--safe-top)); left: 0; right: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+  .toast-container { position: absolute; top: calc(10px + var(--safe-top)); left: 0; right: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
   .toast {
     background: var(--navy); color: var(--gold-bright);
     border: 2px solid var(--gold);

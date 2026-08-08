@@ -240,6 +240,31 @@ function setNpcPortrait(portraitId) {
   }
 }
 
+// Brief happy/sad expression swap on the PLAYER'S OWN portrait, then reverts
+// to whatever should normally be showing (self, or the NPC being talked to).
+// Locks the portrait display for its duration — any setDialogue() calls that
+// happen while it's playing just update the pending target, not interrupt it.
+function showReaction(type) {
+  if (!GAME) return;
+  const el = document.getElementById('npc-portrait-inset');
+  if (!el) return;
+  const mood = type === 'happy' ? 'happy' : type === 'sad' ? 'sad' : null;
+  if (!mood) return;
+
+  el.innerHTML = getCharacterPortraitSVG(GAME.meta.characterId, mood);
+  el.classList.add('show', 'reacting');
+  el.classList.remove('happy', 'sad');
+  el.classList.add(mood);
+  _reactionActive = true;
+
+  clearTimeout(_reactionRevertTimer);
+  _reactionRevertTimer = setTimeout(() => {
+    _reactionActive = false;
+    el.classList.remove('reacting', 'happy', 'sad');
+    setNpcPortrait(CURRENT_PORTRAIT_ID);
+  }, 1300);
+}
+
 function refreshTopbar() {
   document.getElementById('topbar-date').textContent =
     `Day ${GAME.meta.day} · Week ${GAME.meta.week} · Level ${GAME.meta.level}`;
@@ -287,12 +312,25 @@ function refreshAll() {
 // menu if the stack is empty).
 // ================================================================
 
+let CURRENT_PORTRAIT_ID = null; // whatever should be showing in the corner box right now (self or NPC)
+let _reactionRevertTimer = null;
+let _reactionActive = false; // while true, setDialogue() must NOT overwrite the portrait mid-reaction
+
 function setDialogue(title, bodyHtml, menuHtml, opts = {}) {
   document.getElementById('dlg-title').textContent = title;
   document.getElementById('dlg-body').innerHTML = bodyHtml;
   document.getElementById('dlg-menu').innerHTML = menuHtml;
   document.getElementById('dlg-back-btn').style.display = NAV_STACK.length > 0 ? '' : 'none';
-  if (opts.npcPortrait !== undefined) setNpcPortrait(opts.npcPortrait);
+  // Default to showing the PLAYER'S OWN chosen agent portrait whenever no
+  // specific NPC (client/underwriter/candidate) is being talked to, instead
+  // of leaving the corner blank — "you" should always be represented.
+  const resolvedPortrait = (opts.npcPortrait !== undefined && opts.npcPortrait !== null)
+    ? opts.npcPortrait
+    : (GAME ? GAME.meta.characterId : null);
+  CURRENT_PORTRAIT_ID = resolvedPortrait;
+  // If a reaction is actively playing, don't cut it off — just record what
+  // it should revert to. Its own timer applies this once it finishes.
+  if (!_reactionActive) setNpcPortrait(resolvedPortrait);
 }
 
 // Push current-and-new: call with the render fn for the screen you're navigating TO.
@@ -504,6 +542,8 @@ function doRemarket(prospectId) {
 function doResolveUW(prospectId) {
   const r = resolveUnderwriting(GAME, prospectId);
   toast(r.msg);
+  if (r.result === 'quote') showReaction('happy');
+  else if (r.result === 'decline') showReaction('sad');
   repaintTop(() => renderProspectDetail(prospectId));
   refreshAll();
 }
@@ -511,6 +551,7 @@ function doResolveUW(prospectId) {
 function doBind(prospectId) {
   const r = bindPolicy(GAME, prospectId);
   toast(r.msg);
+  if (r.ok) showReaction('happy');
   refreshAll();
   if (GAME.flags.justLeveledUp) {
     GAME.flags.justLeveledUp = false;
@@ -563,6 +604,7 @@ function doFireClient(id) {
     () => {
       loseClient(GAME, c, 'fired by agent');
       toast(`${c.name} has been let go.`);
+      showReaction('sad');
       NAV_STACK = [];
       pushDialogue(renderClientsList);
       refreshAll();
@@ -737,8 +779,10 @@ function resolveEventChoice(index) {
   if (choice.cost && choice.cost.time) {
     GAME.resources.time = Math.max(0, GAME.resources.time - choice.cost.time);
   }
+  const clientsBefore = GAME.clients.length;
   choice.effects(GAME, subject);
   GAME.pendingEvent = null;
+  if (GAME.clients.length < clientsBefore) showReaction('sad');
   checkGameOverAndRender();
   NAV_STACK = [];
   renderMainMenu();

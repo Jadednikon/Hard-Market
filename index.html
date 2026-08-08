@@ -58,21 +58,25 @@
       <span class="topbar-date" id="topbar-date">Day 1 · Week 1 · Level 1</span>
     </div>
 
-    <div class="office-scene" id="office-scene">
-      <!-- static scene art + tap markers injected by JS -->
-      <div class="npc-portrait-inset" id="npc-portrait-inset"></div>
-    </div>
+    <div class="office-body">
+      <div class="office-scene" id="office-scene">
+        <!-- static scene art + tap markers injected by JS -->
+        <div class="npc-portrait-inset" id="npc-portrait-inset"></div>
+      </div>
 
-    <div class="stat-strip" id="stat-strip"></div>
+      <div class="office-side">
+        <div class="stat-strip" id="stat-strip"></div>
 
-    <div class="dialogue-dock">
-      <div class="dialogue-frame">
-        <div class="dialogue-titlebar">
-          <span id="dlg-title" class="pixel-font">OFFICE</span>
-          <button class="dialogue-back-btn" id="dlg-back-btn" onclick="dlgBack()" style="display:none;">◀ BACK</button>
+        <div class="dialogue-dock">
+          <div class="dialogue-frame">
+            <div class="dialogue-titlebar">
+              <span id="dlg-title" class="pixel-font">OFFICE</span>
+              <button class="dialogue-back-btn" id="dlg-back-btn" onclick="dlgBack()" style="display:none;">◀ BACK</button>
+            </div>
+            <div class="dialogue-body" id="dlg-body"></div>
+            <div class="dialogue-menu" id="dlg-menu"></div>
+          </div>
         </div>
-        <div class="dialogue-body" id="dlg-body"></div>
-        <div class="dialogue-menu" id="dlg-menu"></div>
       </div>
     </div>
   </div>

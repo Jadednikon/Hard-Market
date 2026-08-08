@@ -112,33 +112,58 @@
     #app-shell { display: none; }
   }
 
-  /* Landscape: widen the frame and let the office screen use a
-     side-by-side layout instead of the portrait vertical stack. */
+  /* Landscape: let the frame actually use desktop width instead of
+     staying pinned to a small fixed size. min() keeps it from becoming
+     absurd on an ultrawide monitor, but it now genuinely scales. */
   @media (orientation: landscape) {
-    #game-root { max-width: 900px; border-top: 3px solid var(--gold); border-bottom: 3px solid var(--gold); border-left: none; border-right: none; }
-  }
-  @media (orientation: landscape) and (max-height: 500px) {
-    #game-root { max-width: 960px; }
+    #game-root { max-width: min(94vw, 1280px); border-top: 3px solid var(--gold); border-bottom: 3px solid var(--gold); border-left: none; border-right: none; }
   }
 
-  /* Landscape office layout: scene on the left spanning full height,
-     topbar/stats/dialogue stacked on the right — makes real use of
-     the width instead of just being a wider portrait column. */
+  /* Landscape office layout: scene on the left, stats+dialogue on the
+     right. The scene column's WIDTH is derived from its own aspect-ratio
+     (16:9) rather than a fixed percentage, so a wide illustration never
+     gets crushed into a tall narrow box and cropped down to nothing. */
   @media (orientation: landscape) {
     #screen-office.active {
-      display: grid;
-      grid-template-columns: 42% 1fr;
-      grid-template-rows: auto auto 1fr;
-      grid-template-areas:
-        "topbar topbar"
-        "scene  stat"
-        "scene  dock";
+      display: flex;
+      flex-direction: column;
       height: 100%;
     }
-    #screen-office .topbar { grid-area: topbar; }
-    #screen-office .office-scene { grid-area: scene; aspect-ratio: unset; width: 100%; height: 100%; }
-    #screen-office .stat-strip { grid-area: stat; grid-template-columns: 1fr 1fr 1fr; }
-    #screen-office .dialogue-dock { grid-area: dock; min-height: 0; }
+    #screen-office .topbar { flex-shrink: 0; }
+    #screen-office .office-body {
+      display: flex;
+      flex-direction: row;
+      flex: 1;
+      min-height: 0;
+    }
+    #screen-office .office-scene {
+      flex: 0 0 50%;
+      width: 50%;
+      height: 100%;
+      aspect-ratio: unset;
+    }
+    #screen-office .office-scene img.scene-art {
+      object-fit: contain; /* show the WHOLE illustration, never crop it, whatever this box's shape ends up being */
+      background: var(--navy-mid);
+    }
+    #screen-office .office-side {
+      flex: 1 1 0%;
+      min-width: 260px;
+      display: flex;
+      flex-direction: column;
+      border-left: 2px solid var(--wood);
+    }
+    #screen-office .stat-strip { flex-shrink: 0; grid-template-columns: 1fr 1fr; }
+    #screen-office .dialogue-dock { flex: 1; min-height: 0; }
+  }
+
+  /* Fluid typography: the whole stylesheet is in rem, so scaling the root
+     size lets text/menu rows grow smoothly with the frame instead of
+     staying phone-sized inside a much bigger desktop frame. Bounded so it
+     never gets uncomfortably small or large. */
+  html { font-size: clamp(14px, 0.85vw + 10px, 19px); }
+  @media (orientation: landscape) {
+    html { font-size: clamp(14px, 1.1vw + 8px, 20px); }
   }
 
   .pixel-font {
@@ -272,6 +297,11 @@
   }
   .topbar-title { color: var(--gold-bright); font-size: 0.75rem; }
   .topbar-date { color: var(--tan); }
+
+  /* These wrappers only exist to group elements for the landscape row
+     layout below. In portrait/default they're invisible to layout so
+     the existing vertical stacking (scene, stats, dialogue) is unaffected. */
+  .office-body, .office-side { display: contents; }
 
   /* Static scene panel - fixed aspect ratio so illustrated art always
      displays proportionally correct instead of stretching/cropping

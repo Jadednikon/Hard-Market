@@ -40,7 +40,7 @@ function renderCharacterCards() {
   const grid = document.getElementById('character-cards');
   grid.innerHTML = CHARACTERS.map(c => `
     <div class="select-card" id="char-card-${c.id}" onclick="selectCharacter('${c.id}')">
-      <div class="portrait-frame"><img src="assets/portraits/${c.id}-neutral.jpg" alt="${c.name}" style="width:100%;height:100%;object-fit:cover;"></div>
+      <div class="portrait-frame"><img src="assets/portraits/${c.id}-neutral.png" alt="${c.name}" style="width:100%;height:100%;object-fit:cover;"></div>
       <div class="select-card-body">
         <div class="select-card-title">${c.name} — ${c.title}</div>
         <div class="select-card-desc">${c.desc}</div>
@@ -146,7 +146,7 @@ function buildOfficeScene() {
   const characterId = GAME ? GAME.meta.characterId : 'alex';
   const deskPortraitHtml = `
     <div class="player-desk-portrait" id="player-desk-portrait">
-      <img id="player-desk-img" src="assets/portraits/${characterId}-neutral.jpg" alt="You">
+      <img id="player-desk-img" src="assets/portraits/${characterId}-neutral.png" alt="You">
     </div>`;
 
   scene.innerHTML = artHtml + deskPortraitHtml + `<div class="npc-portrait-inset" id="npc-portrait-inset"></div>`;
@@ -186,7 +186,7 @@ function buildOfficeScene() {
 function setPlayerDeskMood(mood) {
   const img = document.getElementById('player-desk-img');
   if (!img || !GAME) return;
-  img.src = `assets/portraits/${GAME.meta.characterId}-${mood}.jpg`;
+  img.src = `assets/portraits/${GAME.meta.characterId}-${mood}.png`;
 }
 
 // Recomputes marker pixel positions against the ACTUAL visible image content
